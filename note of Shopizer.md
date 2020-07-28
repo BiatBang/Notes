@@ -1,12 +1,13 @@
-## ShopApplication:
-- Main -> Application
-- Constants
-- Controller -> tool-like controllers
-- Filters -> Annotations?
-- Init -> Start services
-- Mapper
-- Model -> not for persistance?
-- Populator
+ShopApplication:
+
+# Main -> Application
+# Constants
+# Controller -> tool-like controllers
+# Filters -> Annotations?
+# Init -> Start services
+# Mapper
+# Model -> not for persistance?
+# Populator
 
 ## Dependency Injection:
 If a class needs dependencies, i.e other objects from other classes, it better not create them by itself. An injector is needed to create and pass the dependencies (objects it needs) to it.
@@ -17,9 +18,4 @@ This means Inversion of Control: your dependencies is not under your control. Wh
 auto initiated.
 ```
 @Autowired
-SomeClass someObject;
-```
-works as the same as
-```
-SomeClass someObject = new SomeClass();
 ```
