@@ -86,3 +86,20 @@ Don't get confused, INSTANCE is just the name of one item in this enum.
 ### LocalCache
 Seems the factory method is vital to util classes. For LocalCache, the public "constructor" would be `CacheBuilder.builder()`.
 `StatsCounter` is a class to make inner attribute in Caches to make the stats of caches. It counts hits and misses, and total, then it can canculate the rate of hittings.
+
+## Graph
+Three interfaces increased by complexity: Graph, ValueGraph, Network.
+Builder, of course, again.
+- Builder
+A method to insert configurations into the constructor. Each configuration method would return a type of itself, then Builder().config1().config2()..... would still return a object of that type. The real (maybe private) constructor must have several polymorphisms with different numbers of parameters, or just a "containing everything" constructor. Then, however many parameters are set by config methods, they will be used in the constructors. The rest of parameters will stay the defaul values.
+
+### Graph
+Base graph. Node can be any type. Edge is made by `EndpointPair`.
+
+### ValueGraph
+It's weighted graph...
+
+### Network
+Edges must be unique. Describe a topologic among all the nodes. No parallel edges.
+
+### Traverser
