@@ -34,12 +34,12 @@ Kind A is using Kind B, kind A has subclasses A1, A2, responsively using B1 and 
 Human "wears" clothes.
 Man extends Human, Woman extends Human.
 Jeans extends Clothes, Skirt extends Clothes.
-Man "wears" Jeans and Woman "wears" Clothes. Imagin wear as an object creator.
+Man "wears" Jeans and Woman "wears" Clothes. Imagine wear as an object creator.
 * ge
 Variation: parametered factory method, create(String object). Either with switch case, or with reflection. It's still good to use the ancestors rather than concrete creators.
 
 ## Prototype
-Sometimes, if subclasses have very similiar structures, only the kind varies, it's a a waste to create lots of subclasses. Then, there could be a prototype class, to make copies of different kinds of objects, with different parameter of kind.
+Sometimes, if subclasses have very similar structures, only the kind varies, it's a a waste to create lots of subclasses. Then, there could be a prototype class, to make copies of different kinds of objects, with different parameter of kind.
 The main part of prototype is "clone()".
 When:
 1. classes are specified at runtime (when I read this parameter, I know this is what kind)
@@ -53,6 +53,22 @@ When:
 1. only one instance needed
 2. extend the one object without changing the 
 Singleton is an enhanced global variable. 
+1. lazy initialization with thread safety
+   ```
+   public class Singleton {
+	   private static Singleton singleton;
+	   private Singleton() {}
+	   public Singleton getInstance() {
+		   if(singleton == null) {
+			   synchronized (Singleton.class) {
+				   // double check
+				   if(singleton == null) singleton = new Singleton();
+			   }
+		   }
+		   return singleton;
+	   }
+   }
+   ```
 
 # Structural Patterns
 ## Adapter Pattern

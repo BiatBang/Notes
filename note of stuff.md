@@ -23,13 +23,19 @@ When loading a field from a class,
 
 ## Java
 - transient: a key word for serialization. A variable defined as transient will be cleared to default value when serialized. It's useful for security.
+- wildcard: Collection<?> -> collection of unknown. only used in <>.
+  - <?>
+  - <? extends parent>
+  - <? super child>
 
 ## Concurrency
 ### Sleep, Wait and Yield
 - Sleep: Thread based function. Let the thread sleep without releasing the lock. Immediately turns Runnable after waking up.
+- Thread.sleep(0): thread sleep(0)? why?
+  Each time a thread sleeps, it's declaring it won't use the CPU for some time. In windows, when current thread sleeps, all threads will have different priorities, and the one with the most priority (maybe itself) will occupy the CPU. sleep(time) won't guarantee the thread will gain access right after *time*, but it's guaranteed it won't use the CPU in this period. So, Thread.sleep(0) will let CPU calculates all threads priorities, and decide the one deserves the CPU. It may be itself, or others.
 - Wait: Object-level method. Release the lock and wait until notified. Wait and notify are often used in synchronized block.
 - Yield: pause the current thread and let one thread with the same priority to run; if not, continue itself. Give a chance to other threads to do some simple tasks. Until the other thread finished, continue this thread.
-- Join: join(long millis) waits for the current thread to end and start other thread. Join can make sure next thread only starts after current thread finished its execution.
+- Join: join(long millis) waits for the current thread to end and start other thread. Join can make sure next thread only starts after current thread finished its execution. Who calls it, who waits, (until millis)
 ### Collections
 - CopyOnWrite: When multiple thread working with one collection, there may be writing issues. One solution is to copy when writing. Instead of directly writing to the collection, make a new one with len+1 length, then add to the tail and set it the latest collection. Then unlock the lock. 
 - Locks:
@@ -61,6 +67,123 @@ When loading a field from a class,
   - Hold and Wait （占有并等待）
   - No Preemption （不可抢占）
   - Circular Wait （循环等待）
+### Semaphore
+- Semaphore(int permits, *boolean fair)
+  permits declare the initial available permits, can be negative(release first)
+- acquire()
+  to use the resource, use acquire. if full, block, until one thread release one permit. when acquire() returns, permit -1.
+- release()
+  after using the resource, release it, then permit +1.
+### Synchronized
+- synchronized provides a (re-entrant lock) locking on the resource, prevents reordering of the code, acquires and releases a lock before and after the synchronized block. So, read is locked too.
+- synchronized a static method, will make the whole class locked; synchronized on a non-static method, will make the current object locked
+- synchronized limits only in one JVM
+- level:
+  - Object level: synchronized on a non-static object or a non-static method, then the current object will be locked. When sync a method, only the method will be locked, not the whole object.
+  - Class level: synchronized on a static method or a class, this means all object from this class will be blocked if one is being synced. Singleton can use this to prevent multiple threads create an instance simultaneously.
+- Careful when synchronized on a non-final object. When the reference of the object is changed, the synchronized block may be open.
+### Volatile
+A machine has one main memory, multiple CPUs. Each thread may copy variables from main memory to a CPU cache to relieve the main memory. Therefore, some changes to a variable may be stored in cache rather than directly to main memory. 
+Volatile guarantees the change of the variable will be directly written to main memory. Reading of volatile variables will be from main memory.
+- Full volatile visibility
+  - when writing a volatile variable, all variable in a thread before a volatile variable are written to main memory
+  - when reading a volatile variable, 
+- Happen-before guarantee
+  - when there is a writing operation to a volatile variable, all read or write of other variables that before this write, will happen-before this write. 
+    only operations before it won't be after volatile write, operations after it may still happen-before this write.
+  - when there is a reading operation to a volatile variable, all read or write of other variables that are after the read will not happen-before this reading operation
+- Problems
+  - Volatile only guarantees the operations are directly to and from main memory, but not concurrency guarantees. 
+  - If one volatile variable change is based on the latest value, and two threads both do this operation, there will be problem --- they both read the same value
+  - If the change doesn't depend on the latest value, it's alright
+  - If there is only one thread writing a volatile variable, and other threads just read, volatile guarantees every reading thread can read the latest value of this variable
+- Atomic utils are using volatile
+
+## java.util.concurrent
+### Hashtable v ConcurrentHashMap
+- both are thread-safe
+- Hashtable synchronized every method, making both reading and writing blocked
+- ConcurrentHashMap makes attributes volatile, and only synchronize the writing operations. Reading is not blocked since volatile. So concurrentHashMap has better performance
+### Future
+For an async operation, the process is unsure. Future interface can represent a future result of an async task.
+- get([time], [timeUnit]) get the final result, block if not finished
+- boolean cancel(boolean mayInterrupt) cancel the task, if may be interrupted, return the result of cancellation
+- boolean isCancelled(): returns if the task is cancelled
+- boolean isDone(): return if the task is done. Cancelled is done too 
+### FutureTask
+FutureTask is an implementation of Future. Input a callable / (runnable, result). Constructing a FutureTask won't start it immediately. Call the `run()` to let it run. Other things work the same as Future, `cancel`, `done`...
+FutureTask is using a thread to handle the task by default
+### LinkedBlockingDeque
+A deque allows blocking when full / null
+- boolean offerFirst / offerLast: offer to head or tail, throws exception when full
+- boolean offer (E e, long timeout, TimeUnit unit): offer when not timeout
+  ```
+  public boolean offerFirst(E e, long timeout, TimeUnit unit) throws InterruptedException {
+      if (e == null) {
+          throw new NullPointerException();
+      } else {
+          LinkedBlockingDeque.Node<E> node = new LinkedBlockingDeque.Node(e);
+          // use a Condition.awaitNanos to countdown
+          long nanos = unit.toNanos(timeout);
+          ReentrantLock lock = this.lock;
+          lock.lockInterruptibly();
+
+          try {
+              boolean var9;
+              while(!this.linkFirst(node)) {
+                  if (nanos <= 0L) {
+                      var9 = false;
+                      return var9;
+                  }
+                  // usage of awaitNanos
+                  nanos = this.notFull.awaitNanos(nanos);
+              }
+
+              var9 = true;
+              return var9;
+          } finally {
+              lock.unlock();
+          }
+      }
+    }
+  ```
+- E pollFirst / pollLast: poll from head or tail, throws when null
+- void addFirst / addLast: same as offer
+- putFirst / putLast(put): offer to head or tail, block when full
+### ConcurrentSkipListMap
+SkipList is not just alternative of AVL tree, it's also prone to thread safe. A change to AVL tree will change the structure of the tree, we need to left rotate and right rotate. SkipList is resistent to change. A change will make a node point to another node (or null), but it's still the list, and no change to the whole structure. Look into source code of concurrentskiplistmap, no lock, no volatile, no synchronized, elegant.
+So, iterators and spliterators are weakly consistent.
+- Structure:
+  ```
+  Index(1) ------------next-----------> Index(3)
+    |                                     |
+  down                                  down
+    v                                     v
+  Index(1) --next--> Index(2) --next--> Index(3)
+  ```
+  The order of the nodes depends on keys.
+  Since the keys are ordered, functions normal maps have will have a little difference
+- Set entrySet(): return the entrySet. Use the iterator to get increasing order keys
+- Entry firstEntry(): return the entry with the least value key
+- K firstKey(): ... key ...
+- K lastKey(): ... key ... largest value
+- K ceilingKey(K key): the smallest key larger than the given key
+- K floorKey(K key): the largest key less then the given key (seems a little weird?)
+- Entry pollFirst(Last)Entry: poll as in queue
+- CSLM subMap(from, to): get a submap from *from* to *to*
+### DelayedQueue
+DelayedQueue\<E extends Delayed> is a queue storing elements with a delay time. It has a priorityQueue inside. If the element to poll hasn't expired, return null or wait. Each method (offer*, poll*, size, ...) has a reentrantlock to lock the queue.
+- boolean offer(E e, long timeout, TimeUnit unit):
+  ```
+  public boolean offer(E e, long timeout, TimeUnit unit) {
+        return this.offer(e);
+    }
+  ```
+  (⊙ˍ⊙)
+- E take(): wait forever until there is an available expired element
+- E poll(long timeout, TimeUnit unit): wait until timeout or an available expired element
+- int drainTo(Collection<? extends E> c, [int maxElements]): drain all the expired elements from *this* to c, expired only 
+
 
 ## Spring
 ### Features
@@ -109,7 +232,7 @@ IOC means pass the control of dependencies to a specified container, and let it 
 - clustered index v. non-clustered index
   - clustered: stored inside the table, maintain the order of the index, like insert 5 3 4, then the index will be 3 4 5. One clustered index at most
   - non clustered: outside the table, order can be maintained if specified. Slower than clustered, but can have multiple nc indexes
-- Denormalization: A optimization happens after normalization. Normalization removes all the redundancy but makes queries sometimes slow because of joins. So, if some columns are frequently queried, it can be added to the related table, as a redundancy but quick way to query. 
+- Denormalization: An optimization happens after normalization. Normalization removes all the redundancy but makes queries sometimes slow because of joins. So, if some columns are frequently queried, it can be added to the related table, as a redundancy but quick way to query. 
 - ACID -- for transactions
   - Atomicity: Either fails or succeed all
   - Consistency: From one valid state to another valid state. Ensures the transaction obeys the invariants
@@ -164,4 +287,70 @@ About sharding, we want two things:
   - doesn't support horizontal scale well. It'll cause large impact if sharding the database into small machines, the indexes hurt.
   - not fault tolerant. Replicate of sql machines cost a lot. NoSQL management like cassandra works way better than this.
 
-##
+## ZooKeeper
+A distributed coordination service for distributed applications. Servers inside a zookeeper "ensemble" follow the leader-follower mode. Zookeeper helps distributed application sync.
+### Services
+- Naming service: identify nodes inside a cluster, working like DNS
+- Configuration Management: sync the new coming node with the latest configuration
+- Cluster Management: manage the joining / leaving of nodes, in real time
+- Leader Election: elaborate later
+- Locking and Sync Service: help sync cluster without racing issues
+- Reliability: handle the case when some servers are down
+### Client-Server Architecture
+- Client: machines managed and interacted with zookeeper machines (servers). Periodically send a message (heartbeats) to a server to let it (then them) know it's alive. The server will send back an ack, if not, the client will choose another server to contact
+- Server: nodes in Zookeeper. A member of a Zookeeper Ensemble. Contact the clients to know who's alive and who's down
+- Ensemble: a batch of servers, with an at least 3 machines
+- Leader: recover any node when it's down
+- Follower: follow leader's instruction
+### Types of Nodes
+- Persistence znode: only be removed when a delete call comes. Even if the client who creates it disconnect. Default type.
+- Ephemeral znode: only alive when the client who creates it is alive. Ephemeral znodes can't have children
+- Sequential znode: either persistence or ephemeral. If a node is identified sequential, zk will maintains a sequence of it with a 10 digit number. ZK maintains a sequence of sequential znodes.
+### Workflow
+A client can connect to any node in an ensemble, either to a leader or a follower. When a client connects to node, the node will send back an ack. If the client doesn't receive it, retry other nodes. Then, the client starts sending heartbeats.
+When a client sends data to the ensemble, the node that connects it will pass the data to leader (unless it's the leader), then the leader will send the data to all followers. If a majority of nodes ("Quorum") response it, the request is successful and the node will return the msg to the client.
+It's good to have odd number of nodes inside an ensemble (3, 5, 7...)
+### Leader Election
+Not a complex way. One node issues an election, then it creates a sequential & ephemeral child "/election". Then, each node will create a sequential childe with a sequence number "/election/guid_n**********". After all nodes get a sequence number, the one with the smallest number becomes the leader. 
+Each node should monitor the node with the node with the largest number less than its. If the node being watched by it is down, it will check if its the smallest. If so, it becomes the leader; if not, it find the smallest and let it be the leader. This ensure that there is always one leader. 
+
+## Java Escape Analysis
+A mechanism JVM provides, to know what objects are only used in its thread and what are not. It is a waste of memory if an object is only used its caller thread and it uses a lock. If an object is identified as only in one thread, it will be put into stack instead of heap, and its life will be ended when the function ends. That's why last person asked you: are all the objects stored in heap? How to specify them?
+Scalar replacement: If an object is used pretty frequently but only some scalars are needed, like new Object().x, JVM will stop creating new objects, and only work with the scalar x.
+
+## Git
+### Three Trees
+1. working directory (editor) 
+2. staging index (after add)
+3. commit history (after commit)
+**git stash** is basically a kind of commit, may including multiple commits (staged, untracked, ignored). 
+`git commit --amend` can add changes into last commit
+`git stash [push -m message]` only stores staged changes. Unstaged or ignored files won't be stashed
+`git stash apply` restore the staged changes
+`git stash list` see the stash history
+`git stash pop 1` apply the stash@{1} and delete it
+`git stash -a | --all` will include ignored files
+`git stash --include-untracked` will include untracked files (in working directory)
+`stash` can stash only part of the file
+`git stash branch` stash the changes into a new branch
+`git stash drop stash@{1}` or `git stash clear` to delete the stashes
+
+`git fetch` sees what others do without merging into local project. 
+Git stores local branches in ./.git/refs/heads/ and stores ./.git/refs/remotes/
+fetch will store the files from remote in /remotes/
+`git branch` shows local branches and
+`git branch -r` shows remote branches
+`git fetch <remote> <branch>`
+
+Git push
+`git push <remote> <branch> [--force]` use force option carefully
+`git push <remote> --all`
+
+Git pull
+git pull combines git fetch and git merge
+
+Git merge
+`git merge --squash <branch>` merge with another branch, and squeeze all commits of that branch into one last commit. After this, commit and add some message.
+
+Git rebase
+Base, in a feature branch, means the commit it's separated from the master. Rebase, means updating the base. Master branch evolves while feature branch evolves. When the feature wants to see if it conflicts the latest commit, rebase can change the base to the latest commit of the master. 
