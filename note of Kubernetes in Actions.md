@@ -363,3 +363,69 @@ spec:
   ...
 ```
 Then, the request only finds a local pod to process it, unless there isn't a local one. 
+**Ingress**
+Load Balancer handles external request to a specific service. Ingress is a central control of in-cluster distribution. Ingress receives a request, and redirect it to corresponding service. 
+```
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata: 
+  name: kubia
+spec: 
+  rules:
+  - host: kubia.example.com # the host ip of the cluster, which receives external requests
+    http:
+      paths:
+      - path: /node
+        backend: 
+          serviceName: kubia-nodeport # requests coming to "/node" will be redirected to kubia-nodeport
+          servicePort: 80 # which is 80
+      - path: /foo
+        backend:
+          serviceName: kubia-foo
+          servicePort: 90
+    ...
+```
+Host is host, Ingress is ingress. Ingress has is own IP address and it can be checked by
+`kubectl get ingresses`
+then, configure the ip to the host address, and requests to hostname will go to ingress and dispatch to different services.
+**TLS**
+Ingress is capable of handling TLS connections. And the pod doesn't need to worry about making the connections secure. 
+`kubectl create secret tls <tls-name> --cert=tls.cert --key=tls.key` will create a secret with name
+then, 
+```
+spec:
+  tls:  # configure TLS
+  - hosts: 
+    - kubia.example.com
+    secretName: tls-secret
+  rules: 
+  - host: kubia.example.com
+    http: 
+      paths:
+      - path: /
+        backend: 
+          serviceName: kubia-nodeport
+          servicePort: 80   
+```
+**Readiness**:
+Unlike liveness, readiness will not restart the app.
+```
+spec:
+  template: 
+    ...
+    spec: 
+      containers: 
+      - name: kubia
+        image: ...
+        readinessProbe:
+          exec: 
+            command: 
+            - ls
+            - /var/ready  # use this ls to check if the file exists
+```
+In this case, the probe is using EXEC to detect if the pod is ready. There are 3 ways (like liveness):
+- HTTP Get
+- TCP Socket
+- EXEC
+Sometimes, connection refused can be caused by pods not ready. Readiness is necessary for apps taking a long time to be ready, and for those who don't.
+Once the pod is removed or shut down, the readiness will immediately fails by kubernetes. So no need to add shutdown logic into liveness probe. (Sweet)
