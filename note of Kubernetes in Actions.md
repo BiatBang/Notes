@@ -429,3 +429,26 @@ In this case, the probe is using EXEC to detect if the pod is ready. There are 3
 - EXEC
 Sometimes, connection refused can be caused by pods not ready. Readiness is necessary for apps taking a long time to be ready, and for those who don't.
 Once the pod is removed or shut down, the readiness will immediately fails by kubernetes. So no need to add shutdown logic into liveness probe. (Sweet)
+**Headless**
+Sometimes, a client wants to access all IP addresses of all pods, instead of the clusterIP. Simply set clusterIP to none. 
+```
+apiVersion: v1
+kind: Service
+metadata: 
+  name: kubia-headless
+spec: 
+  clusterIP: None
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: kubia
+```
+## Deployments
+To update pods, there are two ways:
+- delete the old pods, and then start the new ones. This makes pods unavailable before the new ones start. This can be achieved by changing the label from RC / RS.
+- start the new ones first, and then close the old ones. This makes 2 versions of pods exist at the same time. Requires double amount of hardware. 
+**blue-green developments**
+When update new pods, start the new ones. When they are all ready, change the label to the new pods, and the old ones will be removed. 
+**rolling update**
+update the pods one by one. 
